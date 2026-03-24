@@ -1,4 +1,5 @@
-const API_URL = window.location.origin + '/api';
+// const API_URL = window.location.origin + '/api'; // Use for production
+const API_URL = 'http://localhost:5000/api'; // Use for local development
 
 let token = localStorage.getItem('token');
 let user = JSON.parse(localStorage.getItem('user'));
