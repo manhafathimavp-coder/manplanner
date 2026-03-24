@@ -1,5 +1,5 @@
-// const API_URL = window.location.origin + '/api'; // Use for production
-const API_URL = 'http://localhost:5000/api'; // Use for local development
+const isFileAccess = window.location.protocol === 'file:';
+const API_URL = isFileAccess ? 'http://localhost:5000/api' : window.location.origin + '/api';
 
 let token = localStorage.getItem('token');
 let user = JSON.parse(localStorage.getItem('user'));
