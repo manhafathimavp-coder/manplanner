@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Full-Stack To-Do Web Application
 
 A modern, sleek, and minimal To-Do list web application built with a Vanilla HTML/CSS/JS frontend and Node.js + Express + PostgreSQL backend.
@@ -101,3 +102,7 @@ If you want GitHub Actions to automatically deploy on `git push`:
 2. Add secrets for Vercel: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
 3. Add a secret for Render: `RENDER_DEPLOY_HOOK_URL` (you can find this in Render settings for your Web Service).
 4. Now, every push to `main` will re-deploy your application seamlessly.
+=======
+# manplanner
+Full-stack To-Do web app (Node.js/Express + PostgreSQL + Vanilla JS) with JWT auth and a modern glassmorphism UI
+>>>>>>> 2901bfb2d897cc164e076ae13f44ba9dc9b7b519
