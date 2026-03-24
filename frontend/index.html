@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manplanner</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+
+    <div id="toast-container"></div>
+    <div id="loading-spinner" class="hidden"><div class="spinner"></div></div>
+
+    <!-- Authentication View -->
+    <div id="auth-view" class="view active">
+        <div class="auth-wrapper">
+            <div class="auth-card glass-panel">
+                <div class="auth-brand">
+                    <div class="logo-box">
+                        <i class="ph ph-command"></i>
+                    </div>
+                    <h2>Manplanner</h2>
+                    <p>Log in to your command center.</p>
+                </div>
+                
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('login')">Access</button>
+                    <button class="tab" onclick="switchTab('register')">Initialize</button>
+                </div>
+
+                <form id="auth-form">
+                    <div class="input-group" id="name-group" style="display: none;">
+                        <input type="text" id="name" placeholder="Agent Name">
+                    </div>
+                    <div class="input-group">
+                        <input type="email" id="email" placeholder="Email Identifier" required>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="password" placeholder="Passcode" required>
+                    </div>
+                    <button type="submit" class="primary-btn" id="auth-submit">Grant Access</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard App View (Sidebar + Main) -->
+    <div id="dashboard-view" class="view">
+        <div class="app-layout">
+            <!-- Sidebar -->
+            <aside class="sidebar glass-panel">
+                <div class="sidebar-header">
+                    <i class="ph ph-command logo"></i>
+                    <h2>Manplanner</h2>
+                </div>
+
+                <div class="user-profile">
+                    <div class="avatar"><i class="ph ph-user"></i></div>
+                    <div class="user-details">
+                        <span id="user-greeting" class="user-name">Loading...</span>
+                        <span id="user-role-badge" class="user-role">Commander</span>
+                    </div>
+                </div>
+
+                <nav class="nav-menu">
+                    <p class="nav-label">VIEWS</p>
+                    <button class="nav-item active" data-filter="all"><i class="ph ph-squares-four"></i> Overview</button>
+                    <button class="nav-item" data-filter="favorites"><i class="ph ph-star text-yellow"></i> Starred</button>
+                    <button class="nav-item" data-filter="pending"><i class="ph ph-clock"></i> In Progress</button>
+                    <button class="nav-item" data-filter="completed"><i class="ph ph-check-circle text-green"></i> Completed</button>
+
+                    <p class="nav-label mt-4">CATEGORIES</p>
+                    <button class="nav-item" data-filter="Work"><i class="ph ph-briefcase"></i> Work</button>
+                    <button class="nav-item" data-filter="Personal"><i class="ph ph-user"></i> Personal</button>
+                    <button class="nav-item" data-filter="General"><i class="ph ph-folder"></i> General</button>
+                    
+                    <div id="admin-nav-area" class="hidden">
+                        <p class="nav-label mt-4 text-danger">SYSTEM</p>
+                        <button class="nav-item" id="nav-admin" onclick="showAdminPanel()"><i class="ph ph-shield-check text-danger"></i> Admin Control</button>
+                    </div>
+                </nav>
+
+                <div class="sidebar-footer">
+                    <button id="logout-btn" class="nav-item text-danger border-top-burgundy"><i class="ph ph-sign-out"></i> Terminate Session</button>
+                </div>
+            </aside>
+
+            <!-- Main Content Tasks -->
+            <main class="main-content" id="tasks-content">
+                <header class="top-nav">
+                    <div class="search-box">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" id="search-input" placeholder="Search directives...">
+                    </div>
+                    <div class="date-chip" id="date-display"></div>
+                </header>
+
+                <div class="stats-row">
+                    <div class="stat-card glass-panel border-green">
+                        <div class="stat-info">
+                            <h3>Completed</h3>
+                            <span id="stat-completed" class="stat-number">0</span>
+                        </div>
+                        <i class="ph ph-check-circle"></i>
+                    </div>
+                    <div class="stat-card glass-panel border-yellow">
+                        <div class="stat-info">
+                            <h3>High Priority</h3>
+                            <span id="stat-urgent" class="stat-number">0</span>
+                        </div>
+                        <i class="ph ph-warning-circle"></i>
+                    </div>
+                    <div class="stat-card glass-panel border-burgundy">
+                        <div class="stat-info">
+                            <h3>Total Objectives</h3>
+                            <span id="stat-total" class="stat-number">0</span>
+                        </div>
+                        <i class="ph ph-target"></i>
+                    </div>
+                </div>
+
+                <div class="content-header">
+                    <h2 id="current-view-title">Overview</h2>
+                    <button class="primary-btn sm-btn" onclick="openModal()">
+                        <i class="ph ph-plus"></i> New Directive
+                    </button>
+                </div>
+
+                <div id="empty-state" class="hidden">
+                    <i class="ph ph-ghost"></i>
+                    <h3>No Directives Found</h3>
+                    <p>Your queue is empty. Ready for new commands.</p>
+                </div>
+
+                <div class="task-grid" id="task-list"></div>
+            </main>
+
+            <!-- Admin Content -->
+            <main class="main-content hidden" id="admin-content">
+                <div class="content-header">
+                    <h2><i class="ph ph-shield-check text-danger"></i> System Users</h2>
+                </div>
+                
+                <div class="glass-panel" style="padding: 1rem; overflow-x: auto;">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Total Tasks</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-list">
+                            <!-- Users injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Action Modal -->
+    <div id="task-modal" class="modal hidden">
+        <div class="modal-backdrop" onclick="closeModal()"></div>
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2 id="modal-title">New Directive</h2>
+                <button type="button" class="icon-btn" onclick="closeModal()"><i class="ph ph-x"></i></button>
+            </div>
+            <form id="task-form">
+                <input type="hidden" id="task-id">
+                <div class="input-group">
+                    <label>Title</label>
+                    <input type="text" id="task-title" placeholder="Directive Alpha" required autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <label>Briefing (Optional)</label>
+                    <textarea id="task-desc" rows="3" placeholder="Additional parameters..."></textarea>
+                </div>
+                <div class="row">
+                    <div class="input-group">
+                        <label>Category</label>
+                        <select id="task-category">
+                            <option value="Work">Work</option>
+                            <option value="Personal">Personal</option>
+                            <option value="General" selected>General</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Priority</label>
+                        <select id="task-priority">
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High" class="text-danger">High</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="input-group">
+                        <label>Deadline</label>
+                        <input type="date" id="task-date">
+                    </div>
+                    <div class="input-group checkbox-group">
+                        <input type="checkbox" id="task-favorite">
+                        <label for="task-favorite">Mark as Favorite <i class="ph ph-star text-yellow"></i></label>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="secondary-btn" onclick="closeModal()">Abort</button>
+                    <button type="submit" class="primary-btn">Execute</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
