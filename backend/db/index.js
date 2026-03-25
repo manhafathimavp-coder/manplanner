@@ -12,6 +12,8 @@ const schemaStr = `
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'user',
+      avatar TEXT,
+      recovery_key TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
