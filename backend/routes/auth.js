@@ -10,8 +10,8 @@ router.post('/register', async (req, res) => {
     const { name, email, password, recovery_key } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Missing fields' });
 
-    const trimmedEmail = email.trim();
-    const userExists = await db.one('SELECT * FROM users WHERE email = $1', [trimmedEmail]);
+    const trimmedEmail = email.trim().toLowerCase();
+    const userExists = await db.one('SELECT * FROM users WHERE LOWER(email) = $1', [trimmedEmail]);
     if (userExists) return res.status(400).json({ error: 'User already exists' });
 
     // First User becomes SuperAdmin
@@ -22,7 +22,7 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     await db.run('INSERT INTO users (name, email, password, role, recovery_key) VALUES ($1, $2, $3, $4, $5)', [name, trimmedEmail, hashedPassword, role, recovery_key || 'TACTICAL_DEFAULT']);
-    const newUser = await db.one('SELECT id, name, email, role, avatar FROM users WHERE email = $1', [trimmedEmail]);
+    const newUser = await db.one('SELECT id, name, email, role, avatar FROM users WHERE LOWER(email) = $1', [trimmedEmail]);
 
     const token = jwt.sign({ id: newUser.id, email: newUser.email, role: newUser.role }, process.env.JWT_SECRET || 'devsecret', { expiresIn: '1d' });
     res.status(201).json({ user: newUser, token });
@@ -57,8 +57,8 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Missing fields' });
 
-    const trimmedEmail = email.trim();
-    const user = await db.one('SELECT * FROM users WHERE email = $1', [trimmedEmail]);
+    const trimmedEmail = email.trim().toLowerCase();
+    const user = await db.one('SELECT * FROM users WHERE LOWER(email) = $1', [trimmedEmail]);
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
 
     // Auto-promote first user on login if needed
