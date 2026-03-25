@@ -3,15 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manplanner</title>
+    <title>Manplanner | Command Center</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/Draggable.min.js"></script>
 </head>
-<body>
-
+<body class="theme-light">
     <div id="toast-container"></div>
     <div id="loading-spinner" class="hidden"><div class="spinner"></div></div>
+    
+    <!-- Advanced Command Bar (CMD+K) -->
+    <div id="command-bar" class="hidden">
+        <div class="cmd-backdrop" onclick="closeCmdBar()"></div>
+        <div class="cmd-inner glass-panel">
+            <div class="cmd-search">
+                <i class="ph ph-terminal-window"></i>
+                <input type="text" id="cmd-input" placeholder="Jump to directive, view, or settings..." autocomplete="off">
+            </div>
+            <div id="cmd-results"></div>
+        </div>
+    </div>
+    
+    <div class="theme-toast-trigger" onclick="toggleTheme()" title="Switch Environment">
+        <i class="ph ph-sun-dim light-icon"></i>
+        <i class="ph ph-moon-stars dark-icon"></i>
+    </div>
 
     <!-- Authentication View -->
     <div id="auth-view" class="view active">
@@ -66,11 +85,23 @@
 
                 <nav class="nav-menu">
                     <p class="nav-label">VIEWS</p>
-                    <button class="nav-item active" data-filter="all"><i class="ph ph-squares-four"></i> Overview</button>
-                    <button class="nav-item" data-filter="favorites"><i class="ph ph-star text-yellow"></i> Starred</button>
-                    <button class="nav-item" data-filter="pending"><i class="ph ph-clock"></i> In Progress</button>
-                    <button class="nav-item" data-filter="completed"><i class="ph ph-check-circle text-green"></i> Completed</button>
-
+                    <button class="nav-item active" data-view="tasks" data-filter="all"><i class="ph ph-squares-four"></i> Overview</button>
+                    <button class="nav-item" data-view="calendar"><i class="ph ph-calendar-blank"></i> Chrono Scheduler</button>
+                    <button class="nav-item" data-view="analytics"><i class="ph ph-chart-polar"></i> Analytics Center</button>
+                    <button class="nav-item" data-view="timeline"><i class="ph ph-activity"></i> Mission Log</button>
+                    
+                    <p class="nav-label mt-4">EXECUTION</p>
+                    <div class="focus-widget glass-panel">
+                        <div class="focus-header">
+                            <span class="focus-label"><i class="ph ph-lightning"></i> FOCUS MODE</span>
+                            <span id="timer-display">25:00</span>
+                        </div>
+                        <div class="focus-controls">
+                            <button id="timer-start" class="icon-btn sm"><i class="ph ph-play-circle"></i></button>
+                            <button id="timer-reset" class="icon-btn sm"><i class="ph ph-arrow-counter-clockwise"></i></button>
+                        </div>
+                    </div>
+                    
                     <p class="nav-label mt-4">CATEGORIES</p>
                     <button class="nav-item" data-filter="Work"><i class="ph ph-briefcase"></i> Work</button>
                     <button class="nav-item" data-filter="Personal"><i class="ph ph-user"></i> Personal</button>
@@ -78,7 +109,7 @@
                     
                     <div id="admin-nav-area" class="hidden">
                         <p class="nav-label mt-4 text-danger">SYSTEM</p>
-                        <button class="nav-item" id="nav-admin" onclick="showAdminPanel()"><i class="ph ph-shield-check text-danger"></i> Admin Control</button>
+                        <button class="nav-item" id="nav-admin" data-view="admin"><i class="ph ph-shield-check text-danger"></i> Admin Control</button>
                     </div>
                 </nav>
 
@@ -135,6 +166,84 @@
                 </div>
 
                 <div class="task-grid" id="task-list"></div>
+            </main>
+
+            <!-- Analytics View -->
+            <main class="main-content hidden" id="analytics-content">
+                <div class="content-header">
+                    <h2><i class="ph ph-chart-polar"></i> Project Insight</h2>
+                </div>
+                <div class="stats-grid">
+                    <div class="glass-panel chart-container">
+                        <h3>Productivity Trend</h3>
+                        <canvas id="productivityChart"></canvas>
+                    </div>
+                    <div class="glass-panel chart-container">
+                        <h3>Category Distribution</h3>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Profile View -->
+            <main class="main-content hidden" id="profile-content">
+                <div class="content-header">
+                    <h2><i class="ph ph-user-circle-gear"></i> Agent Configuration</h2>
+                </div>
+                <div class="profile-card glass-panel">
+                    <div class="profile-header">
+                        <div class="avatar-large"><i class="ph ph-user-gear"></i></div>
+                        <div class="profile-meta">
+                            <h3 id="p-name">Loading...</h3>
+                            <span id="p-email">Loading...</span>
+                        </div>
+                    </div>
+                    <form id="profile-update-form">
+                        <div class="input-group">
+                            <label>Update Agent Name</label>
+                            <input type="text" id="update-name" placeholder="New alias..." required>
+                        </div>
+                        <div class="input-group">
+                            <label>New Secret Key (Password)</label>
+                            <input type="password" id="update-password" placeholder="Min. 8 characters...">
+                        </div>
+                        <button type="submit" class="primary-btn">Save Configuration</button>
+                    </form>
+                    
+                    <div class="profile-actions mt-4">
+                        <p class="nav-label">Data Portability</p>
+                        <div class="row">
+                            <button onclick="exportData('json')" class="secondary-btn"><i class="ph ph-file-js text-yellow"></i> Export JSON</button>
+                            <button onclick="exportData('csv')" class="secondary-btn"><i class="ph ph-file-csv text-green"></i> Export CSV</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Calendar View -->
+            <main class="main-content hidden" id="calendar-content">
+                <div class="content-header">
+                    <h2><i class="ph ph-calendar-blank"></i> Chrono Scheduler</h2>
+                </div>
+                <div class="calendar-wrapper glass-panel">
+                    <div class="calendar-header">
+                        <button class="icon-btn" onclick="changeMonth(-1)"><i class="ph ph-caret-left"></i></button>
+                        <h3 id="calendar-month-year">March 2026</h3>
+                        <button class="icon-btn" onclick="changeMonth(1)"><i class="ph ph-caret-right"></i></button>
+                    </div>
+                    <div class="calendar-grid-header">
+                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                    </div>
+                    <div id="calendar-days" class="calendar-days"></div>
+                </div>
+            </main>
+
+            <!-- Timeline View -->
+            <main class="main-content hidden" id="timeline-content">
+                <div class="content-header">
+                    <h2><i class="ph ph-activity"></i> Mission Log</h2>
+                </div>
+                <div class="timeline-container" id="timeline-list"></div>
             </main>
 
             <!-- Admin Content -->
@@ -210,6 +319,16 @@
                         <label for="task-favorite">Mark as Favorite <i class="ph ph-star text-yellow"></i></label>
                     </div>
                 </div>
+
+                <div class="input-group">
+                    <label>Tactical Checklist (Subtasks)</label>
+                    <div class="subtask-input-wrap">
+                        <input type="text" id="subtask-input" placeholder="Add tactical step...">
+                        <button type="button" class="icon-btn" onclick="addSubtask()"><i class="ph ph-plus-circle"></i></button>
+                    </div>
+                    <div id="subtask-list" class="subtask-list"></div>
+                </div>
+
                 <div class="modal-actions">
                     <button type="button" class="secondary-btn" onclick="closeModal()">Abort</button>
                     <button type="submit" class="primary-btn">Execute</button>

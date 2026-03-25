@@ -28,6 +28,8 @@ router.post('/register', async (req, res) => {
   }
 });
 
+const authenticateToken = require('../middleware/auth');
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -42,6 +44,32 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role || 'user' }, process.env.JWT_SECRET || 'devsecret', { expiresIn: '1d' });
     res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role || 'user' }, token });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.put('/profile', authenticateToken, async (req, res) => {
+  try {
+    const { name, password } = req.body;
+    let updates = [];
+    let values = [];
+
+    if (name) { updates.push('name = ?'); values.push(name); }
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+      updates.push('password = ?');
+      values.push(hashedPassword);
+    }
+
+    if (updates.length > 0) {
+      values.push(req.user.id);
+      db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    }
+
+    const updatedUser = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(req.user.id);
+    res.json({ user: updatedUser });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

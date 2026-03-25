@@ -17,9 +17,14 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
+      description TEXT,
       completed BOOLEAN DEFAULT 0,
       user_id INTEGER,
       due_date DATETIME,
+      priority TEXT DEFAULT 'Medium',
+      category TEXT DEFAULT 'General',
+      favorite BOOLEAN DEFAULT 0,
+      subtasks TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
