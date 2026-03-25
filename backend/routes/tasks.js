@@ -4,96 +4,106 @@ const authenticateToken = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    const filter = req.query.filter; // all, pending, completed, favorites, work, personal
-    const search = req.query.search;
-    
+    const { filter, search } = req.query;
     let queryArgs = [req.user.id];
-    let queryStr = 'SELECT * FROM tasks WHERE user_id = ?';
+    let queryStr = 'SELECT * FROM tasks WHERE user_id = $1';
 
-    if (filter === 'completed') { queryStr += ' AND completed = 1'; }
-    else if (filter === 'pending') { queryStr += ' AND completed = 0'; }
-    else if (filter === 'favorites') { queryStr += ' AND favorite = 1'; }
-    else if (filter === 'Work') { queryStr += ' AND category = \'Work\''; }
-    else if (filter === 'Personal') { queryStr += ' AND category = \'Personal\''; }
+    if (filter === 'completed') { queryStr += ' AND completed = true'; }
+    else if (filter === 'pending') { queryStr += ' AND completed = false'; }
+    else if (filter === 'favorites') { queryStr += ' AND favorite = true'; }
+    else if (filter === 'Work' || filter === 'Personal') { 
+        queryStr += ` AND category = $${queryArgs.length + 1}`; 
+        queryArgs.push(filter); 
+    }
 
     if (search) {
-      queryStr += ' AND (title LIKE ? OR description LIKE ?)';
+      queryStr += ` AND (title LIKE $${queryArgs.length + 1} OR description LIKE $${queryArgs.length + 2})`;
       queryArgs.push(`%${search}%`, `%${search}%`);
     }
     
-    // Sort by favorite first, then pending/completed, then date
     queryStr += ' ORDER BY favorite DESC, completed ASC, due_date ASC, created_at DESC';
 
-    const tasks = db.prepare(queryStr).all(...queryArgs);
-    const formatted = tasks.map(t => ({...t, completed: t.completed === 1, favorite: t.favorite === 1}));
+    const result = await db.query(queryStr, queryArgs);
+    const formatted = result.rows.map(t => ({
+        ...t, 
+        completed: !!t.completed, 
+        favorite: !!t.favorite 
+    }));
     res.json(formatted);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { title, description, priority, category, due_date, favorite } = req.body;
+    const { title, description, priority, category, due_date, favorite, subtasks } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
 
-    const info = db.prepare(
-      'INSERT INTO tasks (title, description, priority, category, due_date, user_id, completed, favorite) VALUES (?, ?, ?, ?, ?, ?, 0, ?)'
-    ).run(
-      title, 
-      description || null, 
-      priority || 'Medium', 
-      category || 'General', 
-      due_date || null, 
-      req.user.id,
-      favorite ? 1 : 0
+    await db.run(
+      'INSERT INTO tasks (title, description, priority, category, due_date, user_id, completed, favorite, subtasks) VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8)',
+      [title, description || null, priority || 'Medium', category || 'General', due_date || null, req.user.id, !!favorite, subtasks || '[]']
     );
     
-    const newTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(info.lastInsertRowid);
-    res.status(201).json({...newTask, completed: false, favorite: newTask.favorite === 1});
+    const newTask = await db.one('SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [req.user.id]);
+    res.status(201).json({...newTask, completed: false, favorite: !!newTask.favorite});
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, priority, category, completed, favorite, due_date } = req.body;
+    const { title, description, priority, category, completed, favorite, due_date, subtasks } = req.body;
 
-    const task = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(id, req.user.id);
+    const task = await db.one('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [id, req.user.id]);
     if (!task) return res.status(404).json({ error: 'Not found' });
 
     let updates = [];
     let values = [];
 
-    if (title !== undefined) { updates.push('title = ?'); values.push(title); }
-    if (description !== undefined) { updates.push('description = ?'); values.push(description); }
-    if (priority !== undefined) { updates.push('priority = ?'); values.push(priority); }
-    if (category !== undefined) { updates.push('category = ?'); values.push(category); }
-    if (completed !== undefined) { updates.push('completed = ?'); values.push(completed ? 1 : 0); }
-    if (favorite !== undefined) { updates.push('favorite = ?'); values.push(favorite ? 1 : 0); }
-    if (due_date !== undefined) { updates.push('due_date = ?'); values.push(due_date); }
+    const addUpdate = (col, val) => {
+        if (val !== undefined) {
+            updates.push(`${col} = $${values.length + 1}`);
+            values.push(val);
+        }
+    };
+
+    addUpdate('title', title);
+    addUpdate('description', description);
+    addUpdate('priority', priority);
+    addUpdate('category', category);
+    addUpdate('completed', completed);
+    addUpdate('favorite', favorite);
+    addUpdate('due_date', due_date);
+    addUpdate('subtasks', subtasks);
 
     if (updates.length > 0) {
-      updates.push("updated_at = CURRENT_TIMESTAMP");
+      updates.push(`updated_at = TIMESTAMP 'now'`); 
+      // Handle timestamp specifically for the driver helpers or just use a standard one
+      // Actually SQLite doesn't like TIMESTAMP 'now', so let's use CURRENT_TIMESTAMP
+      updates[updates.length-1] = "updated_at = CURRENT_TIMESTAMP";
+
       values.push(id, req.user.id);
-      db.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...values);
+      await db.run(`UPDATE tasks SET ${updates.join(', ')} WHERE id = $${values.length - 1} AND user_id = $${values.length}`, values);
     }
 
-    const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
-    res.json({...updatedTask, completed: updatedTask.completed === 1, favorite: updatedTask.favorite === 1});
+    const updatedTask = await db.one('SELECT * FROM tasks WHERE id = $1', [id]);
+    res.json({...updatedTask, completed: !!updatedTask.completed, favorite: !!updatedTask.favorite});
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const info = db.prepare('DELETE FROM tasks WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
-    if (info.changes === 0) return res.status(404).json({ error: 'Not found' });
+    const info = await db.run('DELETE FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
     res.json({ message: 'Deleted' });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

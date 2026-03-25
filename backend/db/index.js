@@ -1,34 +1,90 @@
+const { Pool } = require('pg');
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const dbPath = path.resolve(__dirname, 'database.sqlite');
-const db = new Database(dbPath, { verbose: console.log });
+const isProd = process.env.DATABASE_URL;
+let db;
 
-// Initialize schema
-db.exec(`
+const schemaStr = `
   CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      role TEXT DEFAULT 'user',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT,
-      completed BOOLEAN DEFAULT 0,
-      user_id INTEGER,
-      due_date DATETIME,
+      completed BOOLEAN DEFAULT false,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      due_date TIMESTAMP,
       priority TEXT DEFAULT 'Medium',
       category TEXT DEFAULT 'General',
-      favorite BOOLEAN DEFAULT 0,
+      favorite BOOLEAN DEFAULT false,
       subtasks TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
-`);
+`;
 
-module.exports = db;
+if (isProd) {
+    db = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false }
+    });
+    console.log('Using PostgreSQL (Production)');
+} else {
+    const dbPath = path.resolve(__dirname, 'database.sqlite');
+    const sqlite = new Database(dbPath, { verbose: console.log });
+    
+    // SQLite Specific Schema Fix (AUTOINCREMENT instead of SERIAL)
+    sqlite.exec(schemaStr.replace(/SERIAL/g, 'INTEGER').replace(/PRIMARY KEY/g, 'PRIMARY KEY AUTOINCREMENT').replace(/TIMESTAMP/g, 'DATETIME').replace(/false/g, '0'));
+    
+    db = {
+        query: async (text, params) => {
+            const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
+            return { rows: params ? stmt.all(...params) : stmt.all() };
+        },
+        one: async (text, params) => {
+            const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
+            return params ? stmt.get(...params) : stmt.get();
+        },
+        run: async (text, params) => {
+            const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
+            return stmt.run(...params);
+        }
+    };
+    console.log('Using SQLite (Development)');
+}
+
+// Helper to handle both drivers
+const runQuery = async (text, params) => {
+    if (isProd) {
+        return db.query(text, params);
+    } else {
+        return db.query(text, params);
+    }
+};
+
+const runOne = async (text, params) => {
+    if (isProd) {
+        const res = await db.query(text, params);
+        return res.rows[0];
+    } else {
+        return db.one(text, params);
+    }
+};
+
+const runExec = async (text, params) => {
+    if (isProd) {
+        return db.query(text, params);
+    } else {
+        return db.run(text, params);
+    }
+};
+
+module.exports = { query: runQuery, one: runOne, run: runExec, isProd };

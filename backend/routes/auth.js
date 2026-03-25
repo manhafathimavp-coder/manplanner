@@ -11,14 +11,15 @@ router.post('/register', async (req, res) => {
     if (!name || !email || !password) return res.status(400).json({ error: 'Missing fields' });
 
     const trimmedEmail = email.trim();
-    const userExists = db.prepare('SELECT * FROM users WHERE email = ?').get(trimmedEmail);
+    const userExists = await db.one('SELECT * FROM users WHERE email = $1', [trimmedEmail]);
     if (userExists) return res.status(400).json({ error: 'User already exists' });
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const info = db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(name, trimmedEmail, hashedPassword, 'user');
-    const newUser = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(info.lastInsertRowid);
+    const info = await db.run('INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)', [name, trimmedEmail, hashedPassword, 'user']);
+    // Since SQLITE .run and PG .query return different things for last ID, let's fetch by email
+    const newUser = await db.one('SELECT id, name, email, role FROM users WHERE email = $1', [trimmedEmail]);
 
     const token = jwt.sign({ id: newUser.id, email: newUser.email, role: newUser.role }, process.env.JWT_SECRET || 'devsecret', { expiresIn: '1d' });
     res.status(201).json({ user: newUser, token });
@@ -36,7 +37,7 @@ router.post('/login', async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: 'Missing fields' });
 
     const trimmedEmail = email.trim();
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(trimmedEmail);
+    const user = await db.one('SELECT * FROM users WHERE email = $1', [trimmedEmail]);
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
 
     const validPassword = await bcrypt.compare(password, user.password);
@@ -55,20 +56,20 @@ router.put('/profile', authenticateToken, async (req, res) => {
     let updates = [];
     let values = [];
 
-    if (name) { updates.push('name = ?'); values.push(name); }
+    if (name) { updates.push(`name = $${updates.length + 1}`); values.push(name); }
     if (password) {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
-      updates.push('password = ?');
+      updates.push(`password = $${updates.length + 1}`);
       values.push(hashedPassword);
     }
 
     if (updates.length > 0) {
       values.push(req.user.id);
-      db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+      await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length}`, values);
     }
 
-    const updatedUser = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(req.user.id);
+    const updatedUser = await db.one('SELECT id, name, email, role FROM users WHERE id = $1', [req.user.id]);
     res.json({ user: updatedUser });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
