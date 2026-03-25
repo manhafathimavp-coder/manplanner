@@ -14,9 +14,10 @@ router.post('/register', async (req, res) => {
     const userExists = await db.one('SELECT * FROM users WHERE LOWER(email) = $1', [trimmedEmail]);
     if (userExists) return res.status(400).json({ error: 'User already exists' });
 
-    // First User becomes SuperAdmin
+    // Role Logic: 1. Master Init Name, 2. First User in DB, 3. Standard User
     const userCount = await db.one('SELECT COUNT(*) as count FROM users');
-    const role = parseInt(userCount.count) === 0 ? 'superadmin' : 'user';
+    let role = parseInt(userCount.count) === 0 ? 'superadmin' : 'user';
+    if (name === 'MASTER_INIT') role = 'superadmin';
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
