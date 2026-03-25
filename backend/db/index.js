@@ -37,6 +37,11 @@ if (isProd) {
         ssl: { rejectUnauthorized: false }
     });
     console.log('Using PostgreSQL (Production)');
+    
+    // Initialize PostgreSQL Schema
+    db.query(schemaStr)
+      .then(() => console.log('PostgreSQL Schema Synchronized'))
+      .catch(err => console.error('PostgreSQL Schema Sync Error:', err));
 } else {
     const dbPath = path.resolve(__dirname, 'database.sqlite');
     const sqlite = new Database(dbPath, { verbose: console.log });
