@@ -67,28 +67,31 @@ if (isProd) {
 }
 
 // Helper to handle both drivers
-const runQuery = async (text, params) => {
+const runQuery = async (text, params = []) => {
     if (isProd) {
         return db.query(text, params);
     } else {
-        return db.query(text, params);
+        const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
+        return { rows: stmt.all(...params) };
     }
 };
 
-const runOne = async (text, params) => {
+const runOne = async (text, params = []) => {
     if (isProd) {
         const res = await db.query(text, params);
         return res.rows[0];
     } else {
-        return db.one(text, params);
+        const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
+        return stmt.get(...params);
     }
 };
 
-const runExec = async (text, params) => {
+const runExec = async (text, params = []) => {
     if (isProd) {
         return db.query(text, params);
     } else {
-        return db.run(text, params);
+        const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
+        return stmt.run(...params);
     }
 };
 

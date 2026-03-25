@@ -10,6 +10,10 @@ let editingTaskId = null;
 let charts = {};
 let tempSubtasks = [];
 
+// Board State
+let isDrawing = false;
+let ctx;
+
 // Timer State
 let timerInterval;
 let timerSeconds = 1500;
@@ -114,6 +118,10 @@ function showDashboard() {
     document.getElementById('p-name').textContent = user.name;
     document.getElementById('p-email').textContent = user.email;
     document.getElementById('update-name').value = user.name;
+    if (user.avatar) {
+        document.getElementById('avatar-preview').innerHTML = `<img src="${user.avatar}" alt="Avatar">`;
+        document.getElementById('top-avatar').innerHTML = `<img src="${user.avatar}" alt="Avatar">`;
+    }
 
     // Admin visibility
     const adminArea = document.getElementById('admin-nav-area');
@@ -147,7 +155,32 @@ function switchView(viewName) {
     if (viewName === 'analytics') initAnalytics();
     if (viewName === 'calendar') renderCalendar();
     if (viewName === 'timeline') renderTimeline();
+    if (viewName === 'board') initBoard();
     if (viewName === 'admin') fetchAdminUsers();
+}
+
+// Tactical Board Engine
+function initBoard() {
+    const canvas = document.getElementById('sketch-canvas');
+    ctx = canvas.getContext('2d');
+    
+    // Size to container
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight || 500;
+    
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = document.getElementById('brush-color').value;
+
+    canvas.onmousedown = (e) => { isDrawing = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); };
+    canvas.onmousemove = (e) => { if(isDrawing) { ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } };
+    window.onmouseup = () => { isDrawing = false; };
+    
+    document.getElementById('brush-color').onchange = (e) => ctx.strokeStyle = e.target.value;
+}
+
+function clearBoard() {
+    ctx.clearRect(0, 0, document.getElementById('sketch-canvas').width, document.getElementById('sketch-canvas').height);
 }
 
 // Focus Mode Logic
@@ -376,7 +409,8 @@ authForm.addEventListener('submit', async (e) => {
             showToast('Authorization Granted');
         } else {
             const name = document.getElementById('name').value.trim();
-            data = await apiCall('/auth/register', 'POST', { name, email, password });
+            const recovery_key = document.getElementById('recovery-key').value.trim();
+            data = await apiCall('/auth/register', 'POST', { name, email, password, recovery_key });
             showToast('Core systems initialized.');
         }
         
@@ -385,6 +419,27 @@ authForm.addEventListener('submit', async (e) => {
         authForm.reset(); showDashboard();
     } catch (err) {}
 });
+
+function showRecovery() {
+    document.getElementById('auth-form').classList.add('hidden');
+    document.getElementById('recovery-view').classList.remove('hidden');
+}
+
+function hideRecovery() {
+    document.getElementById('auth-form').classList.remove('hidden');
+    document.getElementById('recovery-view').classList.add('hidden');
+}
+
+async function executeRecovery() {
+    const email = document.getElementById('recovery-email').value.trim();
+    const recovery_key = document.getElementById('recovery-input').value.trim();
+    const newPassword = document.getElementById('recovery-new-password').value;
+    try {
+        await apiCall('/auth/recovery', 'POST', { email, recovery_key, newPassword });
+        showToast('Mission systems restored. Log in.');
+        hideRecovery();
+    } catch (err) {}
+}
 
 function handleLogout() {
     token = null; user = null; localStorage.clear(); showAuth();
@@ -498,6 +553,35 @@ document.getElementById('profile-update-form').addEventListener('submit', async 
         showDashboard();
     } catch (err) {}
 });
+
+async function deleteAccount() {
+    if (!confirm('Are you absolutely sure? All tactical data will be permanently redacted.')) return;
+    try {
+        await apiCall('/auth/profile', 'DELETE');
+        handleLogout();
+        showToast('Identity deleted.');
+    } catch (err) {}
+}
+
+async function handleAvatarUpdate(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+        const base64 = reader.result;
+        try {
+            const res = await apiCall('/auth/profile', 'PUT', { avatar: base64 });
+            user = res.user;
+            localStorage.setItem('user', JSON.stringify(user));
+            document.getElementById('avatar-preview').innerHTML = `<img src="${base64}">`;
+            document.getElementById('top-avatar').innerHTML = `<img src="${base64}">`;
+            showToast('Persona synchronized.');
+        } catch (err) {}
+    };
+    reader.readAsDataURL(file);
+}
+
+document.getElementById('avatar-input').onchange = handleAvatarUpdate;
 
 // Analytics Implementation
 async function initAnalytics() {

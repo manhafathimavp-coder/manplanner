@@ -52,6 +52,7 @@
                 <form id="auth-form">
                     <div class="input-group" id="name-group" style="display: none;">
                         <input type="text" id="name" placeholder="Agent Name">
+                        <input type="text" id="recovery-key" placeholder="Tactical Recovery Key (A secret phrase)" class="mt-2">
                     </div>
                     <div class="input-group">
                         <input type="email" id="email" placeholder="Email Identifier" required>
@@ -60,7 +61,23 @@
                         <input type="password" id="password" placeholder="Passcode" required>
                     </div>
                     <button type="submit" class="primary-btn" id="auth-submit">Grant Access</button>
+                    <p class="auth-helper mt-4" id="forgot-link" style="text-align: center; font-size: 0.85rem;"><a href="#" onclick="showRecovery()" style="color: var(--primary-color);">Forgotten Secret Key?</a></p>
                 </form>
+
+                <div id="recovery-view" class="hidden">
+                    <p class="nav-label">MISSION RECOVERY</p>
+                    <div class="input-group">
+                        <input type="email" id="recovery-email" placeholder="Confirmed Email">
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="recovery-input" placeholder="Recovery Key">
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="recovery-new-password" placeholder="New Passcode">
+                    </div>
+                    <button onclick="executeRecovery()" class="primary-btn w-full">Restore Access</button>
+                    <button onclick="hideRecovery()" class="secondary-btn w-full mt-2">Abort</button>
+                </div>
             </div>
         </div>
     </div>
@@ -87,6 +104,7 @@
                     <p class="nav-label">VIEWS</p>
                     <button class="nav-item active" data-view="tasks" data-filter="all"><i class="ph ph-squares-four"></i> Overview</button>
                     <button class="nav-item" data-view="calendar"><i class="ph ph-calendar-blank"></i> Chrono Scheduler</button>
+                    <button class="nav-item" data-view="board"><i class="ph ph-scribble-loop"></i> Tactical Sketch</button>
                     <button class="nav-item" data-view="analytics"><i class="ph ph-chart-polar"></i> Analytics Center</button>
                     <button class="nav-item" data-view="timeline"><i class="ph ph-activity"></i> Mission Log</button>
                     
@@ -192,7 +210,11 @@
                 </div>
                 <div class="profile-card glass-panel">
                     <div class="profile-header">
-                        <div class="avatar-large"><i class="ph ph-user-gear"></i></div>
+                        <div class="avatar-wrap">
+                            <div class="avatar-large" id="avatar-preview"><i class="ph ph-user-gear"></i></div>
+                            <input type="file" id="avatar-input" class="hidden" accept="image/*">
+                            <button class="icon-btn avatar-edit" onclick="document.getElementById('avatar-input').click()"><i class="ph ph-camera"></i></button>
+                        </div>
                         <div class="profile-meta">
                             <h3 id="p-name">Loading...</h3>
                             <span id="p-email">Loading...</span>
@@ -211,12 +233,26 @@
                     </form>
                     
                     <div class="profile-actions mt-4">
-                        <p class="nav-label">Data Portability</p>
-                        <div class="row">
-                            <button onclick="exportData('json')" class="secondary-btn"><i class="ph ph-file-js text-yellow"></i> Export JSON</button>
-                            <button onclick="exportData('csv')" class="secondary-btn"><i class="ph ph-file-csv text-green"></i> Export CSV</button>
+                        <p class="nav-label">Security & Redaction</p>
+                        <div class="row gap-2">
+                             <button onclick="exportData('json')" class="secondary-btn"><i class="ph ph-file-js text-yellow"></i> Export JSON</button>
+                            <button onclick="deleteAccount()" class="danger-btn"><i class="ph ph-warning-circle"></i> Delete Identity</button>
                         </div>
                     </div>
+                </div>
+            </main>
+
+            <!-- Tactical Sketch Board -->
+            <main class="main-content hidden" id="board-content">
+                <div class="content-header">
+                    <h2><i class="ph ph-scribble-loop"></i> Tactical Sketch Board</h2>
+                    <div class="board-controls">
+                        <input type="color" id="brush-color" value="#795548">
+                        <button class="icon-btn" onclick="clearBoard()"><i class="ph ph-trash-simple"></i></button>
+                    </div>
+                </div>
+                <div class="board-wrapper glass-panel">
+                    <canvas id="sketch-canvas"></canvas>
                 </div>
             </main>
 
