@@ -14,11 +14,14 @@ router.post('/register', async (req, res) => {
     const userExists = await db.one('SELECT * FROM users WHERE email = $1', [trimmedEmail]);
     if (userExists) return res.status(400).json({ error: 'User already exists' });
 
+    // First User becomes SuperAdmin
+    const userCount = await db.one('SELECT COUNT(*) as count FROM users');
+    const role = parseInt(userCount.count) === 0 ? 'superadmin' : 'user';
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const info = await db.run('INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)', [name, trimmedEmail, hashedPassword, 'user']);
-    // Since SQLITE .run and PG .query return different things for last ID, let's fetch by email
+    await db.run('INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)', [name, trimmedEmail, hashedPassword, role]);
     const newUser = await db.one('SELECT id, name, email, role FROM users WHERE email = $1', [trimmedEmail]);
 
     const token = jwt.sign({ id: newUser.id, email: newUser.email, role: newUser.role }, process.env.JWT_SECRET || 'devsecret', { expiresIn: '1d' });
@@ -39,6 +42,13 @@ router.post('/login', async (req, res) => {
     const trimmedEmail = email.trim();
     const user = await db.one('SELECT * FROM users WHERE email = $1', [trimmedEmail]);
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
+
+    // Auto-promote first user on login if needed
+    const userCountRes = await db.one('SELECT COUNT(*) as count FROM users');
+    if (parseInt(userCountRes.count) === 1 && user.role !== 'superadmin') {
+      await db.run('UPDATE users SET role = $1 WHERE id = $2', ['superadmin', user.id]);
+      user.role = 'superadmin';
+    }
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(400).json({ error: 'Invalid credentials' });
