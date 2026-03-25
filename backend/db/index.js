@@ -31,6 +31,27 @@ const schemaStr = `
   );
 `;
 
+const bcrypt = require('bcrypt');
+
+const seedAdmin = async () => {
+    try {
+        const adminEmail = 'admin@manplanner.com';
+        const salt = await bcrypt.genSalt(10);
+        const hashed = await bcrypt.hash('admin123', salt);
+        
+        const exists = await runOne('SELECT * FROM users WHERE email = $1', [adminEmail]);
+        if (!exists) {
+            await runExec('INSERT INTO users (name, email, password, role, recovery_key) VALUES ($1, $2, $3, $4, $5)', 
+                ['Master Admin', adminEmail, hashed, 'superadmin', 'MASTER_RECOVERY']);
+            console.log('✅ Master SuperAdmin Initialized');
+        } else {
+            // Force reset credentials to master passcode
+            await runExec('UPDATE users SET password = $1, role = $2 WHERE email = $3', [hashed, 'superadmin', adminEmail]);
+            console.log('✅ Master SuperAdmin Synchronized');
+        }
+    } catch (err) {}
+};
+
 if (isProd) {
     db = new Pool({
         connectionString: process.env.DATABASE_URL,
@@ -40,7 +61,10 @@ if (isProd) {
     
     // Initialize PostgreSQL Schema
     db.query(schemaStr)
-      .then(() => console.log('PostgreSQL Schema Synchronized'))
+      .then(() => {
+          console.log('PostgreSQL Schema Synchronized');
+          seedAdmin();
+      })
       .catch(err => console.error('PostgreSQL Schema Sync Error:', err));
 } else {
     const dbPath = path.resolve(__dirname, 'database.sqlite');
@@ -64,6 +88,7 @@ if (isProd) {
         }
     };
     console.log('Using SQLite (Development)');
+    seedAdmin();
 }
 
 // Helper to handle both drivers
