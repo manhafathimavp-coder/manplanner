@@ -43,10 +43,10 @@ router.post('/', authenticateToken, async (req, res) => {
     const { title, description, priority, category, due_date, favorite, subtasks } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
 
-    // Use 0 for 'completed' literals in SQLite
+    // Use a placeholder for 'completed' to let the DB driver/sanitizer handle types
     await db.run(
-      'INSERT INTO tasks (title, description, priority, category, due_date, user_id, completed, favorite, subtasks) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8)',
-      [title, description || null, priority || 'Medium', category || 'General', due_date || null, req.user.id, favorite, subtasks || '[]']
+      'INSERT INTO tasks (title, description, priority, category, due_date, user_id, completed, favorite, subtasks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      [title, description || null, priority || 'Medium', category || 'General', due_date || null, req.user.id, false, favorite, subtasks || '[]']
     );
     
     const newTask = await db.one('SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [req.user.id]);
