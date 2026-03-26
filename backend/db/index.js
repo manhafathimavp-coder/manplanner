@@ -115,12 +115,22 @@ if (isProd) {
     });
     console.log('Using PostgreSQL (Production)');
     
+    const migrations = `
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_key TEXT;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'Medium';
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General';
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS favorite BOOLEAN DEFAULT false;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtasks TEXT DEFAULT '[]';
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TIMESTAMP;
+    `;
+
     db.query(schemaStr)
+      .then(() => db.query(migrations))
       .then(() => {
-          console.log('PostgreSQL Schema Synchronized');
+          console.log('PostgreSQL Schema & Migrations Synchronized');
           seedAdmin();
       })
-      .catch(err => console.error('PostgreSQL Schema Sync Error:', err));
+      .catch(err => console.error('PostgreSQL Initialization Error:', err));
 } else {
     try {
         const dbPath = path.resolve(__dirname, 'database.sqlite');
