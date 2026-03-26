@@ -10,9 +10,9 @@ router.get('/', authenticateToken, async (req, res) => {
     let queryArgs = [req.user.id];
     let queryStr = 'SELECT * FROM tasks WHERE user_id = $1';
 
-    if (filter === 'completed') { queryStr += ' AND completed = true'; }
-    else if (filter === 'pending') { queryStr += ' AND completed = false'; }
-    else if (filter === 'favorites') { queryStr += ' AND favorite = true'; }
+    if (filter === 'completed') { queryStr += ' AND completed = 1'; }
+    else if (filter === 'pending') { queryStr += ' AND completed = 0'; }
+    else if (filter === 'favorites') { queryStr += ' AND favorite = 1'; }
     else if (filter === 'Work' || filter === 'Personal') { 
         queryStr += ` AND category = $${queryArgs.length + 1}`; 
         queryArgs.push(filter); 
@@ -33,8 +33,8 @@ router.get('/', authenticateToken, async (req, res) => {
     }));
     res.json(formatted);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('TASKS_GET_ERROR:', err);
+    res.status(500).json({ error: 'SERVER_ERR: ' + err.message });
   }
 });
 
@@ -43,16 +43,19 @@ router.post('/', authenticateToken, async (req, res) => {
     const { title, description, priority, category, due_date, favorite, subtasks } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
 
+    // Use 0 for 'completed' literals in SQLite
     await db.run(
-      'INSERT INTO tasks (title, description, priority, category, due_date, user_id, completed, favorite, subtasks) VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8)',
-      [title, description || null, priority || 'Medium', category || 'General', due_date || null, req.user.id, !!favorite, subtasks || '[]']
+      'INSERT INTO tasks (title, description, priority, category, due_date, user_id, completed, favorite, subtasks) VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8)',
+      [title, description || null, priority || 'Medium', category || 'General', due_date || null, req.user.id, favorite, subtasks || '[]']
     );
     
     const newTask = await db.one('SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [req.user.id]);
+    if (!newTask) throw new Error('Failed to retrieve newly created task');
+    
     res.status(201).json({...newTask, completed: false, favorite: !!newTask.favorite});
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('TASKS_POST_ERROR:', err);
+    res.status(500).json({ error: 'SERVER_ERR: ' + err.message });
   }
 });
 
@@ -84,11 +87,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     addUpdate('subtasks', subtasks);
 
     if (updates.length > 0) {
-      updates.push(`updated_at = TIMESTAMP 'now'`); 
-      // Handle timestamp specifically for the driver helpers or just use a standard one
-      // Actually SQLite doesn't like TIMESTAMP 'now', so let's use CURRENT_TIMESTAMP
-      updates[updates.length-1] = "updated_at = CURRENT_TIMESTAMP";
-
+      updates.push(`updated_at = CURRENT_TIMESTAMP`); 
       values.push(id, req.user.id);
       await db.run(`UPDATE tasks SET ${updates.join(', ')} WHERE id = $${values.length - 1} AND user_id = $${values.length}`, values);
     }
@@ -96,17 +95,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const updatedTask = await db.one('SELECT * FROM tasks WHERE id = $1', [id]);
     res.json({...updatedTask, completed: !!updatedTask.completed, favorite: !!updatedTask.favorite});
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('TASKS_PUT_ERROR:', err);
+    res.status(500).json({ error: 'SERVER_ERR: ' + err.message });
   }
 });
 
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const info = await db.run('DELETE FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    await db.run('DELETE FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
     res.json({ message: 'Deleted' });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'SERVER_ERR: ' + err.message });
   }
 });
 

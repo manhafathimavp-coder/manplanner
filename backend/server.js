@@ -30,8 +30,8 @@ app.use((req, res, next) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  console.error('SERVER_ERROR_STACK:', err.stack);
+  res.status(500).json({ error: err.message || 'Something went wrong!' });
 });
 
 const PORT = process.env.PORT || 5000;

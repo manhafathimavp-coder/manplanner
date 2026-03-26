@@ -39,13 +39,18 @@ const convertToSqlite = (text) => {
     return text.replace(/\$\d+/g, '?');
 };
 
+const sanitizeParams = (params) => {
+    if (isProd) return params;
+    return params.map(p => typeof p === 'boolean' ? (p ? 1 : 0) : p);
+};
+
 const runQuery = async (text, params = []) => {
     try {
         if (isProd) {
             return await db.query(text, params);
         } else {
             const stmt = sqlite.prepare(convertToSqlite(text));
-            const rows = stmt.all(...params);
+            const rows = stmt.all(...sanitizeParams(params));
             return { rows };
         }
     } catch (err) {
@@ -61,7 +66,7 @@ const runOne = async (text, params = []) => {
             return res.rows[0];
         } else {
             const stmt = sqlite.prepare(convertToSqlite(text));
-            return stmt.get(...params);
+            return stmt.get(...sanitizeParams(params));
         }
     } catch (err) {
         console.error('❌ DB One Error:', err.message, '| Query:', text);
@@ -75,7 +80,7 @@ const runExec = async (text, params = []) => {
             return await db.query(text, params);
         } else {
             const stmt = sqlite.prepare(convertToSqlite(text));
-            return stmt.run(...params);
+            return stmt.run(...sanitizeParams(params));
         }
     } catch (err) {
         console.error('❌ DB Exec Error:', err.message, '| Query:', text);
