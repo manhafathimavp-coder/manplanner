@@ -36,7 +36,9 @@ const schemaStr = `
 `;
 
 const convertToSqlite = (text) => {
-    return text.replace(/\$\d+/g, '?');
+    return text.replace(/\$\d+/g, '?')
+               .replace(/true/g, '1')
+               .replace(/false/g, '0');
 };
 
 const sanitizeParams = (params) => {

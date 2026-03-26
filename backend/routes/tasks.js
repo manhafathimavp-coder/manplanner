@@ -10,9 +10,9 @@ router.get('/', authenticateToken, async (req, res) => {
     let queryArgs = [req.user.id];
     let queryStr = 'SELECT * FROM tasks WHERE user_id = $1';
 
-    if (filter === 'completed') { queryStr += ' AND completed = 1'; }
-    else if (filter === 'pending') { queryStr += ' AND completed = 0'; }
-    else if (filter === 'favorites') { queryStr += ' AND favorite = 1'; }
+    if (filter === 'completed') { queryStr += ' AND completed = true'; }
+    else if (filter === 'pending') { queryStr += ' AND completed = false'; }
+    else if (filter === 'favorites') { queryStr += ' AND favorite = true'; }
     else if (filter === 'Work' || filter === 'Personal') { 
         queryStr += ` AND category = $${queryArgs.length + 1}`; 
         queryArgs.push(filter); 
