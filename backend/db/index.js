@@ -1,9 +1,11 @@
 const { Pool } = require('pg');
 const Database = require('better-sqlite3');
 const path = require('path');
+const bcrypt = require('bcrypt');
 
 const isProd = process.env.DATABASE_URL;
 let db;
+let sqlite;
 
 const schemaStr = `
   CREATE TABLE IF NOT EXISTS users (
@@ -33,7 +35,53 @@ const schemaStr = `
   );
 `;
 
-const bcrypt = require('bcrypt');
+const convertToSqlite = (text) => {
+    return text.replace(/\$\d+/g, '?');
+};
+
+const runQuery = async (text, params = []) => {
+    try {
+        if (isProd) {
+            return await db.query(text, params);
+        } else {
+            const stmt = sqlite.prepare(convertToSqlite(text));
+            const rows = stmt.all(...params);
+            return { rows };
+        }
+    } catch (err) {
+        console.error('❌ DB Query Error:', err.message, '| Query:', text);
+        throw err;
+    }
+};
+
+const runOne = async (text, params = []) => {
+    try {
+        if (isProd) {
+            const res = await db.query(text, params);
+            return res.rows[0];
+        } else {
+            const stmt = sqlite.prepare(convertToSqlite(text));
+            return stmt.get(...params);
+        }
+    } catch (err) {
+        console.error('❌ DB One Error:', err.message, '| Query:', text);
+        throw err;
+    }
+};
+
+const runExec = async (text, params = []) => {
+    try {
+        if (isProd) {
+            return await db.query(text, params);
+        } else {
+            const stmt = sqlite.prepare(convertToSqlite(text));
+            return stmt.run(...params);
+        }
+    } catch (err) {
+        console.error('❌ DB Exec Error:', err.message, '| Query:', text);
+        throw err;
+    }
+};
 
 const seedAdmin = async () => {
     try {
@@ -47,11 +95,12 @@ const seedAdmin = async () => {
                 ['Master Admin', adminEmail, hashed, 'superadmin', 'MASTER_RECOVERY']);
             console.log('✅ Master SuperAdmin Initialized');
         } else {
-            // Force reset credentials to master passcode
             await runExec('UPDATE users SET password = $1, role = $2 WHERE email = $3', [hashed, 'superadmin', adminEmail]);
             console.log('✅ Master SuperAdmin Synchronized');
         }
-    } catch (err) {}
+    } catch (err) {
+        console.error('❌ seedAdmin Error:', err.message);
+    }
 };
 
 if (isProd) {
@@ -61,7 +110,6 @@ if (isProd) {
     });
     console.log('Using PostgreSQL (Production)');
     
-    // Initialize PostgreSQL Schema
     db.query(schemaStr)
       .then(() => {
           console.log('PostgreSQL Schema Synchronized');
@@ -69,57 +117,24 @@ if (isProd) {
       })
       .catch(err => console.error('PostgreSQL Schema Sync Error:', err));
 } else {
-    const dbPath = path.resolve(__dirname, 'database.sqlite');
-    const sqlite = new Database(dbPath, { verbose: console.log });
-    
-    // SQLite Specific Schema Fix (AUTOINCREMENT instead of SERIAL)
-    sqlite.exec(schemaStr.replace(/SERIAL/g, 'INTEGER').replace(/PRIMARY KEY/g, 'PRIMARY KEY AUTOINCREMENT').replace(/TIMESTAMP/g, 'DATETIME').replace(/false/g, '0'));
-    
-    db = {
-        query: async (text, params) => {
-            const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
-            return { rows: params ? stmt.all(...params) : stmt.all() };
-        },
-        one: async (text, params) => {
-            const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
-            return params ? stmt.get(...params) : stmt.get();
-        },
-        run: async (text, params) => {
-            const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
-            return stmt.run(...params);
-        }
-    };
-    console.log('Using SQLite (Development)');
-    seedAdmin();
+    try {
+        const dbPath = path.resolve(__dirname, 'database.sqlite');
+        sqlite = new Database(dbPath, { verbose: null }); 
+        sqlite.pragma('foreign_keys = ON'); // Enable foreign keys for CASCADE support
+        
+        const sqliteSchema = schemaStr
+            .replace(/SERIAL/g, 'INTEGER')
+            .replace(/PRIMARY KEY/g, 'PRIMARY KEY AUTOINCREMENT')
+            .replace(/TIMESTAMP/g, 'DATETIME')
+            .replace(/false/g, '0')
+            .replace(/true/g, '1');
+            
+        sqlite.exec(sqliteSchema);
+        console.log('Using SQLite (Development)');
+        seedAdmin();
+    } catch (err) {
+        console.error('❌ SQLite Init Error:', err.message);
+    }
 }
-
-// Helper to handle both drivers
-const runQuery = async (text, params = []) => {
-    if (isProd) {
-        return db.query(text, params);
-    } else {
-        const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
-        return { rows: stmt.all(...params) };
-    }
-};
-
-const runOne = async (text, params = []) => {
-    if (isProd) {
-        const res = await db.query(text, params);
-        return res.rows[0];
-    } else {
-        const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
-        return stmt.get(...params);
-    }
-};
-
-const runExec = async (text, params = []) => {
-    if (isProd) {
-        return db.query(text, params);
-    } else {
-        const stmt = sqlite.prepare(text.replace(/\$/g, '?'));
-        return stmt.run(...params);
-    }
-};
 
 module.exports = { query: runQuery, one: runOne, run: runExec, isProd };
